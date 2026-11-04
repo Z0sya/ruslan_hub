@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Refuse an accidental invocation from a PR, fork, tag or untrusted event.
+[[ "${GITHUB_REPOSITORY:-}" == Z0sya/ruslan_hub && "${GITHUB_REF:-}" == refs/heads/main ]] || { echo 'Only the original repository main branch may use SSH'; exit 1; }
+[[ "${GITHUB_EVENT_NAME:-}" == push || "${GITHUB_EVENT_NAME:-}" == workflow_dispatch ]] || { echo 'SSH is disabled for this event'; exit 1; }
 source scripts/ssh_setup.sh
-cat scripts/server_preflight.sh scripts/server_readiness.sh | \
-  ssh -p "$SERVER_PORT" "${SSH_ARGS[@]}" "$SERVER_USER@$SERVER_HOST" 'bash -s'
+ssh -p "$SERVER_PORT" "${SSH_ARGS[@]}" "$SERVER_USER@$SERVER_HOST" 'bash -s' < scripts/server_preflight.sh
 if [[ "${DEPLOY_MODE:-preflight}" == preflight ]]; then
   exit 0
 fi
