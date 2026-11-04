@@ -1,0 +1,44 @@
+name: Public connectivity check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/network-check.yml']
+
+permissions: {}
+
+jobs:
+  public-http:
+    name: Check site from GitHub network
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Test public TCP and HTTP without laptop VPN or SSH secrets
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket
+          import urllib.request
+
+          host = '31.56.48.8'
+          for port in (22, 8081):
+              try:
+                  with socket.create_connection((host, port), timeout=10):
+                      print(f'TCP_{port}=reachable', flush=True)
+              except OSError as error:
+                  print(f'TCP_{port}=unreachable ({error})', flush=True)
+          opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+          good = True
+          for path in ('/', '/release.txt'):
+              url = f'http://{host}:8081{path}'
+              try:
+                  with opener.open(url, timeout=10) as response:
+                      print(f'PUBLIC_HTTP {path}: {response.status}', flush=True)
+                      good &= response.status == 200
+              except OSError as error:
+                  print(f'PUBLIC_HTTP {path}: failed ({error})', flush=True)
+                  good = False
+          if not good:
+              raise SystemExit('Site is not reachable from the GitHub network; inspect server/provider firewall and routing.')
+          PY
