@@ -1,0 +1,65 @@
+name: Public connectivity check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  public-http:
+    name: Check site from GitHub network
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Test public TCP and HTTP without laptop VPN or SSH secrets
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket
+          import urllib.request
+
+          host = '31.56.48.8'
+          for port in (22, 8081):
+              try:
+                  with socket.create_connection((host, port), timeout=10):
+                      print(f'TCP_{port}=reachable', flush=True)
+              except OSError as error:
+                  print(f'TCP_{port}=unreachable ({error})', flush=True)
+          opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+          good = True
+          for path in ('/', '/release.txt'):
+              url = f'http://{host}:8081{path}'
+              try:
+                  with opener.open(url, timeout=10) as response:
+                      print(f'PUBLIC_HTTP {path}: {response.status}', flush=True)
+                      good &= response.status == 200
+              except OSError as error:
+                  print(f'PUBLIC_HTTP {path}: failed ({error})', flush=True)
+                  good = False
+          if not good:
+              raise SystemExit('Site is not reachable from the GitHub network; inspect server/provider firewall and routing.')
+          PY
+
+  server-network:
+    name: Read site listener and firewall metadata
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'Z0sya/ruslan_hub' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Read the isolated site listener without changing firewall or nginx
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+          SERVER_PORT: ${{ vars.SERVER_PORT }}
+        run: |
+          source scripts/ssh_setup.sh
+          ssh -p "$SERVER_PORT" "${SSH_ARGS[@]}" "$SERVER_USER@$SERVER_HOST" 'bash -s' < scripts/server_network_check.sh
