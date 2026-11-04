@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source scripts/ssh_setup.sh
-ssh -p "$SERVER_PORT" "${SSH_ARGS[@]}" "$SERVER_USER@$SERVER_HOST" 'bash -s' < scripts/server_preflight.sh
+cat scripts/server_preflight.sh scripts/server_readiness.sh | \
+  ssh -p "$SERVER_PORT" "${SSH_ARGS[@]}" "$SERVER_USER@$SERVER_HOST" 'bash -s'
 if [[ "${DEPLOY_MODE:-preflight}" == preflight ]]; then
   exit 0
 fi
