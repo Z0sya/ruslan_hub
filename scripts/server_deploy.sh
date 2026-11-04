@@ -28,6 +28,8 @@ fi
 [[ -f "$archive" && ! -L "$archive" && ! -e "$release" && ! -L "$release" && ! -e "$next" && ! -L "$next" ]] || exit 1
 activated=0
 committed=0
+# Called indirectly by the EXIT trap; regression tests exercise rollback paths.
+# shellcheck disable=SC2317
 finish() {
   status=$?
   trap - EXIT
@@ -88,6 +90,7 @@ ln -s "$release" "$next"
 activated=1
 mv -Tf "$next" "$root/current"
 for attempt in {1..10}; do
+  echo "Checking published release (attempt $attempt/10)"
   if [[ "$(curl --silent --show-error --fail --connect-timeout 5 --max-time 10 \
       --header 'Cache-Control: no-cache' "${site_url%/}/release.txt" 2>/dev/null || true)" == "$sha" ]] && \
       curl --silent --show-error --fail --connect-timeout 5 --max-time 10 \
