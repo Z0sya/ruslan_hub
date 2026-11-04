@@ -36,7 +36,8 @@ class NginxTests(unittest.TestCase):
             env = dict(os.environ, PATH=str(bindir) + ':' + os.environ['PATH'])
             try:
                 first = subprocess.run(['bash', str(script)], env=env, capture_output=True, text=True, timeout=30)
-                self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+                log = root / '.nginx/error.log'
+                self.assertEqual(first.returncode, 0, first.stdout + first.stderr + (log.read_text() if log.exists() else ''))
                 pidfile = root / '.nginx/nginx.pid'
                 pid = pidfile.read_text()
                 for attempt in range(20):

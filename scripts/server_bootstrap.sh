@@ -67,7 +67,7 @@ if not path.exists():
 PY
 "$nginx" -e "$runtime/error.log" -p "$runtime/" -c "$runtime/nginx.conf" -t
 running=false
-if [[ -f "$runtime/nginx.pid" ]]; then
+if [[ -s "$runtime/nginx.pid" ]]; then
   pid=$(cat "$runtime/nginx.pid")
   [[ "$pid" =~ ^[0-9]+$ ]] || exit 1
   if kill -0 "$pid" 2>/dev/null; then
