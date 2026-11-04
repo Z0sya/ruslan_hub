@@ -15,6 +15,8 @@ latest=$(git ls-remote https://github.com/Z0sya/ruslan_hub.git refs/heads/main |
 (cd dist && sha256sum --check site.tar.gz.sha256)
 digest=$(sha256sum dist/site.tar.gz | cut -d ' ' -f1)
 token="$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+cat scripts/server_preflight.sh scripts/server_bootstrap.sh | \
+  ssh -p "$SERVER_PORT" "${SSH_ARGS[@]}" "$SERVER_USER@$SERVER_HOST" 'bash -s'
 # No rsync --delete, no sudo, and no nginx reload.
 scp -P "$SERVER_PORT" "${SSH_ARGS[@]}" dist/site.tar.gz "$SERVER_USER@$SERVER_HOST:/var/www/main-site/.upload-$token.tar.gz"
 printf -v command 'bash -s -- %q %q %q' "$token" "$digest" "$SITE_URL"
