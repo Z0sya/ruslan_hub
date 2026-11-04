@@ -2,9 +2,6 @@ name: Public connectivity check
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths: ['.github/workflows/network-check.yml']
 
 permissions: {}
 
