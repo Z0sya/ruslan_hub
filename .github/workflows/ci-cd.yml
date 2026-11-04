@@ -1,0 +1,82 @@
+name: CI and deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'preflight checks secrets and SSH without changing server files'
+        type: choice
+        options: [preflight, deploy]
+        default: preflight
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Validate site
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check website references and regression tests
+        run: |
+          python3 scripts/check_site.py
+          python3 -m unittest discover -s tests -v
+      - name: Check JavaScript and deployment scripts
+        run: |
+          find site -name '*.js' -print0 | xargs -0 -n1 node --check
+          for script in scripts/*.sh; do bash -n "$script"; done
+          shellcheck -x scripts/*.sh
+      - name: Package the checked commit
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: python3 scripts/check_site.py --sha "$COMMIT_SHA"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: site-${{ github.sha }}
+          path: |
+            dist/site.tar.gz
+            dist/site.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: SSH preflight or deploy
+    needs: ci
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true') ||
+       (github.event_name == 'workflow_dispatch' &&
+        (inputs.mode == 'preflight' || vars.DEPLOY_ENABLED == 'true')))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: site-${{ github.sha }}
+          path: dist
+      - name: Verify SSH or publish the checked artifact
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+          SERVER_PORT: ${{ vars.SERVER_PORT }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
+          DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'deploy' }}
+        run: bash scripts/publish.sh
