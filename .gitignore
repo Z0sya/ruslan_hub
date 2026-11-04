@@ -6,3 +6,7 @@ __pycache__/
 .env.*
 *.pem
 *.key
+id_rsa
+id_ed25519
+secret_deploy_github*
+known_hosts*
